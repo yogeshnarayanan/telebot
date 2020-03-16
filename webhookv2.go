@@ -8,12 +8,42 @@ import (
 
 //WebhookV2 enables webhook
 type WebhookV2 struct {
-	dest chan<- Update
-	bot  *Bot
+	PublicURL      string
+	AllowedUpdates []string
+	dest           chan<- Update
+	bot            *Bot
 }
 
 //Poll poller
 func (h *WebhookV2) Poll(b *Bot, dest chan Update, stop chan struct{}) {
+
+	data := struct {
+		URL            string   `json:"url"`
+		AllowedUpdates []string `json:"allowed_updates"`
+	}{
+		h.PublicURL,
+		h.AllowedUpdates,
+	}
+
+	res, err := b.Raw("setWebhook", data)
+	if err != nil {
+		b.debug(fmt.Errorf("setWebhook failed %q: %v", string(res), err))
+		close(stop)
+		return
+	}
+	var result registerResult
+	err = json.Unmarshal(res, &result)
+	if err != nil {
+		b.debug(fmt.Errorf("bad json data %q: %v", string(res), err))
+		close(stop)
+		return
+	}
+	if !result.Ok {
+		b.debug(fmt.Errorf("cannot register webhook: %s", result.Description))
+		close(stop)
+		return
+	}
+
 	h.dest = dest
 	h.bot = b
 

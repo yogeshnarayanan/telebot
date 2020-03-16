@@ -1,4 +1,4 @@
-module github.com/yogeshnarayanan/telebot.v2
+module github.com/yogeshnarayanan/telebot
 
 go 1.12
 
