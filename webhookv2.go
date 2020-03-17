@@ -10,13 +10,11 @@ import (
 type WebhookV2 struct {
 	PublicURL      string
 	AllowedUpdates []string
-	dest           chan<- Update
 	bot            *Bot
 }
 
-//Poll poller
-func (h *WebhookV2) Poll(b *Bot, dest chan Update, stop chan struct{}) {
-
+//Register webhook
+func (h *WebhookV2) Register(b *Bot) error {
 	data := struct {
 		URL            string   `json:"url"`
 		AllowedUpdates []string `json:"allowed_updates"`
@@ -28,29 +26,21 @@ func (h *WebhookV2) Poll(b *Bot, dest chan Update, stop chan struct{}) {
 	res, err := b.Raw("setWebhook", data)
 	if err != nil {
 		b.debug(fmt.Errorf("setWebhook failed %q: %v", string(res), err))
-		close(stop)
-		return
+		return err
 	}
 	var result registerResult
 	err = json.Unmarshal(res, &result)
 	if err != nil {
 		b.debug(fmt.Errorf("bad json data %q: %v", string(res), err))
-		close(stop)
-		return
+		return err
 	}
 	if !result.Ok {
-		b.debug(fmt.Errorf("cannot register webhook: %s", result.Description))
-		close(stop)
-		return
+		err := fmt.Errorf("cannot register webhook: %s", result.Description)
+		b.debug(err)
+		return err
 	}
-
-	h.dest = dest
 	h.bot = b
-
-	go func(stop chan struct{}) {
-		<-stop
-		close(stop)
-	}(stop)
+	return nil
 }
 
 // ServeHTTP The handler simply reads the update from the body of the requests
@@ -62,5 +52,5 @@ func (h *WebhookV2) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.bot.debug(fmt.Errorf("cannot decode update: %v", err))
 		return
 	}
-	h.dest <- update
+	h.bot.incomingUpdate(&update)
 }
